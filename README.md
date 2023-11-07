@@ -1,3 +1,6 @@
+# Important
+This repository is being maintained from S-RM's [github repo](https://github.com/S-RM/wiskess_rust)
+
 # wiskess_rust
 
 ![271793948-27e9b4b3-0a7f-4efb-a844-2eda7a8a6385](https://github.com/vividDuck/wiskess_rust/assets/122105925/46cacffc-a0d0-4ec7-b1cb-60bca314d2bb)
