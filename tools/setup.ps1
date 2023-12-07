@@ -8,6 +8,10 @@ This downloads the required tools.
     Date:   2023-06-14
 #>
 
+param (
+    [string] $gitKey
+)
+
 # Admin only mode
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))  
 {  
@@ -57,6 +61,11 @@ function  gitInstall($gitRepo, $outDir) {
   Set-Location "$toolPath"
 }
 
+function gitRelease($gitRepo, $gitKeyToken) {
+  Write-Host "Getting release of $gitRepo"
+  & py $toolPath\setup_get_git.py $gitKeyToken $gitRepo
+}
+
 function Install-Rust {
   choco uninstall rust
   # Download and install the Rust installer
@@ -78,7 +87,7 @@ function Start-MainSetup {
   # install chocolatey, git, 7zip, ripgrep, python2/3, EZ-Tools, chainsaw, hayabusa, osfmount, fd
   Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 
-  choco install -y git 7zip ripgrep python2 fd osfmount awscli mingw
+  choco install -y git 7zip ripgrep python2 fd osfmount awscli
   $chkPython = checkPython
   if ($chkPython.ToLower().Contains("python 3")) {
     write-host "Python already installed" -ForegroundColor White -BackgroundColor DarkGreen
@@ -87,8 +96,8 @@ function Start-MainSetup {
     choco install -y python3
   }
   
-  # Rust is needed for compiling hayabusa and chainsaw
-  Install-Rust
+  # Rust is needed for compiling hayabusa and chainsaw - not anymore, as will download latest release instead
+  # Install-Rust
 
   # Download azcopy to tools folder
   Install-Azcopy
@@ -98,28 +107,37 @@ function Start-MainSetup {
   $gitRepos = @{
     # Format: "URL gitRepo" = "Output Director outDir"
     "https://github.com/EricZimmerman/Get-ZimmermanTools.git" = "Get-ZimmermanTools"
-    "https://github.com/SigmaHQ/sigma" = "sigma"
+    # "https://github.com/Neo23x0/Loki2.git" = "loki2"
+  }
+  $gitReleases = @{    
+    # "https://github.com/SigmaHQ/sigma" = "sigma"
     "https://github.com/countercept/chainsaw" = "chainsaw"
     "https://github.com/Yamato-Security/hayabusa" = "hayabusa"
     "https://github.com/omerbenamram/evtx.git" = "evtx"
-    "https://github.com/Neo23x0/Loki.git" = "loki"
-    "https://github.com/Neo23x0/Loki2.git" = "loki2"
-    "https://github.com/omerbenamram/mft.git" = "mft"
+    "https://github.com/Neo23x0/loki.git" = "loki"
+    "https://github.com/omerbenamram/mft" = "mft"
   }
   # Install all listed git repos
   $gitRepos.Keys.Clone() | ForEach-Object {
     gitInstall -gitRepo $_ -outDir $gitRepos.$_
   }
-
-  # Hayabusa post process, move exe to sibling of rules
-  if ($(Test-Path -PathType Leaf "$toolPath\hayabusa\target\release\hayabusa.exe") -eq $True) {
-    Copy-Item "$toolPath\hayabusa\target\release\hayabusa.exe" "$toolPath\hayabusa\hayabusa.exe"
-  } else {
-    Copy-Item "$toolPath\hayabusa.exe" "$toolPath\hayabusa\hayabusa.exe"
+  # Install all listed git releases
+  $gitReleases.Keys.Clone() | ForEach-Object {
+    gitRelease -gitRepo $_ -gitKey $gitKey
   }
+  
+  # Hayabusa post process, move exe to sibling of rules
+  # if ($(Test-Path -PathType Leaf "$toolPath\hayabusa\target\release\hayabusa.exe") -eq $True) {
+  #   Copy-Item "$toolPath\hayabusa\target\release\hayabusa.exe" "$toolPath\hayabusa\hayabusa.exe"
+  # } else {
+  #   Copy-Item "$toolPath\hayabusa.exe" "$toolPath\hayabusa\hayabusa.exe"
+  # }
 
   # EZ Tools
   & "$toolPath\Get-ZimmermanTools\Get-ZimmermanTools.ps1" -NetVersion 4 -Dest "$toolPath\Get-ZimmermanTools\"
+
+  # Chainsaw download shimcache patterns
+  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/WithSecureLabs/chainsaw/master/analysis/shimcache_patterns.txt" -OutFile "$toolPath\shimcache_patterns.txt"
 
   # installPython-CIM -- needs python2
   py -3 -m pip install PyQt6
@@ -129,9 +147,15 @@ function Start-MainSetup {
   py -m pip install polars
   py -m pip install chardet
   py -m pip install datetime
+  py -m pip install filetype
+  py -m pip install requests
 
   # Reprting - Out-HTMLView and New-HTMLTable
   Install-Module -Force PSWriteHTML -SkipPublisherCheck
+}
+
+if (!$gitKey) {
+  $gitKey = Read-Host -Prompt "[?] What's your git token? Please follow these guidelines if unaware: https://github.blog/2022-10-18-introducing-fine-grained-personal-access-tokens-for-github/"
 }
 
 Start-MainSetup
